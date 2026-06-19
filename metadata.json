@@ -1,0 +1,6 @@
+{
+  "name": "Assistente Virtual Proex Ifes",
+  "description": "Assistente virtual oficial com RAG para responder dúvidas sobre a Pró-Reitoria de Extensão (Proex) do Ifes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
