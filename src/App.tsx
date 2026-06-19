@@ -28,7 +28,8 @@ import {
   Calendar,
   Check,
   Lock,
-  LogOut
+  LogOut,
+  TrendingUp
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -39,6 +40,7 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
+  Legend,
   PieChart, 
   Pie, 
   Cell, 
@@ -58,6 +60,7 @@ interface BotConfig {
   botName: string;
   systemInstruction: string;
   threshold: number;
+  welcomeMessage: string;
 }
 
 interface RAGStatus {
@@ -84,6 +87,7 @@ interface DashboardStats {
   resolutionData: { name: string; value: number; color: string }[];
   categoriesData: { name: string; quantidade: number }[];
   accessTimelineData: { data: string; acessos: number }[];
+  categoryResolutionData?: { name: string; Resolvidos: number; Direcionados: number }[];
 }
 
 interface AppLog {
@@ -134,7 +138,8 @@ export default function App() {
   const [botConfig, setBotConfig] = useState<BotConfig>({
     botName: "Assistente Proex",
     systemInstruction: "",
-    threshold: 0.25
+    threshold: 0.25,
+    welcomeMessage: "Olá! Seja muito bem-vindo ao portal de atendimento da Pró-Reitoria de Extensão (Proex/Ifes). Estou aqui para responder dúvidas institucionais com base nos documentos oficiais de editais do Pibex, as diretrizes de Estágios, Cursos de Extensão (FIC) e Núcleos de Arte e Cultura. Como posso ajudar você hoje?"
   });
   const [ragStatus, setRagStatus] = useState<RAGStatus>({
     chunkCount: 0,
@@ -287,6 +292,20 @@ export default function App() {
     }
   }, [activeTab]);
 
+  // Sync welcome message on configuration load/changes
+  useEffect(() => {
+    if (botConfig.welcomeMessage) {
+      setMessages(prev => {
+        if (prev.length > 0 && prev[0].id === "welcome") {
+          const updated = [...prev];
+          updated[0] = { ...updated[0], text: botConfig.welcomeMessage };
+          return updated;
+        }
+        return prev;
+      });
+    }
+  }, [botConfig.welcomeMessage]);
+
   const fetchConfigs = async () => {
     try {
       const r = await fetch("/api/config");
@@ -356,7 +375,8 @@ export default function App() {
   // Restores default prompt configuration
   const handleRestoreDefaultConfig = async () => {
     const defaultInstruction = "Você é o assistente virtual oficial da Pró-Reitoria de Extensão (Proex) do Ifes. Seu conhecimento é pautado na Base de Conhecimento RAG. Use marcadores gráficos, listas estruturadas, emojis ou espaços para dar destaque no lugar de negritos (NUNCA use asteriscos como ** nas suas respostas). Caso considere necessário ou útil, você é incentivado(a) a enviar links de formulários e arquivos oficiais do site da Proex (no domínio https://proex.ifes.edu.br). Se a resposta não puder ser obtida através do contexto fornecido, instrua o usuário a entrar em contato com o setor responsável pelo e-mail oficial (proex@ifes.edu.br) ou pelo telefone (27) 3357-7540 ramal 3019 de forma acolhedora. Responda detalhadamente em língua portuguesa.";
-    const updated = { ...botConfig, systemInstruction: defaultInstruction, threshold: 0.25 };
+    const defaultWelcome = "Olá! Seja muito bem-vindo ao portal de atendimento da Pró-Reitoria de Extensão (Proex/Ifes). Estou aqui para responder dúvidas institucionais com base nos documentos oficiais de editais do Pibex, as diretrizes de Estágios, Cursos de Extensão (FIC) e Núcleos de Arte e Cultura. Como posso ajudar você hoje?";
+    const updated = { ...botConfig, systemInstruction: defaultInstruction, threshold: 0.25, welcomeMessage: defaultWelcome };
     try {
       const r = await fetch("/api/config", {
         method: "POST",
@@ -366,7 +386,7 @@ export default function App() {
       const data = await r.json();
       if (data.success) {
         setBotConfig(data.config);
-        alert("Prompt original restaurado com sucesso!");
+        alert("Configuração padrão restaurada com sucesso!");
       }
     } catch (e) {
       console.error(e);
@@ -1045,6 +1065,90 @@ export default function App() {
 
                   </div>
 
+                  {/* NEW SECTION: Performance & Channels by Relevance Category */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    {/* Graph C: Resolution x Routing by category */}
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm lg:col-span-2 space-y-4">
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                          <TrendingUp className="w-4 h-4 text-emerald-800" />
+                          Relação de Resolução x Direcionamento por Categoria
+                        </h4>
+                        <p className="text-xs text-slate-500">
+                          Monitoramento de dúvidas resolvidas automaticamente via RAG vs. contatos direcionados para suporte especializado
+                        </p>
+                      </div>
+                      <div className="h-64">
+                        {dashboardStats?.categoryResolutionData && (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={dashboardStats.categoryResolutionData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                              <XAxis dataKey="name" stroke="#64748B" fontSize={10} tickLine={false} interval={0} angle={-12} textAnchor="end" height={45} />
+                              <YAxis stroke="#64748B" fontSize={11} tickLine={false} width={30} />
+                              <Tooltip contentStyle={{ fontSize: 12 }} cursor={{ fill: "#F8FAFC" }} />
+                              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
+                              <Bar dataKey="Resolvidos" fill="#10B981" radius={[4, 4, 0, 0]} name="Respondido RAG" />
+                              <Bar dataKey="Direcionados" fill="#F59E0B" radius={[4, 4, 0, 0]} name="Incompleto / Direcionado" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quick Contacts Map Directory */}
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                              <Globe className="w-4 h-4 text-emerald-800" />
+                              Canais & Contatos de Relevância
+                            </h4>
+                            <p className="text-xs text-slate-500">Mapeamento operacional de canais de atendimento por diretoria e assunto</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 space-y-3.5">
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-start gap-2.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0" />
+                            <div className="text-xs space-y-0.5">
+                              <p className="font-semibold text-slate-800">Coordenadoria de Extensão</p>
+                              <p className="text-slate-500 font-mono text-[10px]">📞 Ramal 3023 | cadastro.extensao@ifes.edu.br</p>
+                              <p className="text-[10px] text-slate-400">Suporte a novos cadastros de fomento e prazos no Sigext</p>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100/50 flex items-start gap-2.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-600 mt-1.5 flex-shrink-0" />
+                            <div className="text-xs space-y-0.5">
+                              <p className="font-semibold text-emerald-950">Agência de Inovação (Agifes)</p>
+                              <p className="text-emerald-800 font-mono text-[10px]">📞 Ramal 3022 | agifes.ifes.edu.br</p>
+                              <p className="text-[10px] text-emerald-600 font-medium">Contatos especializados:</p>
+                              <div className="grid grid-cols-1 gap-0.5 pl-2 border-l border-emerald-300 text-[10px] text-emerald-700 font-mono">
+                                <span>• PI: agifes.pi@ifes.edu.br</span>
+                                <span>• Incubadora: agifes.inc@ifes.edu.br</span>
+                                <span>• Serviços: agifes.servtec@ifes.edu.br</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50 flex items-start gap-2.5">
+                            <span className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 flex-shrink-0" />
+                            <div className="text-xs space-y-0.5">
+                              <p className="font-semibold text-indigo-950">Secretaria de Cultura e Difusão</p>
+                              <p className="text-indigo-800 font-mono text-[10px]">📞 Ramal 3021 | secretaria.cultura@ifes.edu.br</p>
+                              <p className="text-[10px] text-indigo-600">Apoio a mostras artísticas, fomento, NAC e festivais locais</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="pt-2 text-slate-400 text-center text-[10px] font-mono">
+                        Base RAG Sincronizada com Contatos Oficiais
+                      </div>
+                    </div>
+
+                  </div>
+
                   {/* Volume Timeline trend chart */}
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                     <div>
@@ -1261,6 +1365,21 @@ export default function App() {
                         placeholder="Ex: Assistente Proex"
                         required
                       />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">Mensagem Inicial de Boas-vindas:</label>
+                      <textarea
+                        rows={3}
+                        value={botConfig.welcomeMessage}
+                        onChange={(e) => setBotConfig({ ...botConfig, welcomeMessage: e.target.value })}
+                        className="w-full text-xs px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-emerald-600 bg-slate-50/30 leading-relaxed"
+                        placeholder="Insira a mensagem que o bot exibirá na abertura do chat..."
+                        required
+                      />
+                      <p className="text-[10px] text-slate-400">
+                        * Esta mensagem será mostrada no balão inicial do chat para recepcionar os usuários da Proex.
+                      </p>
                     </div>
 
                     <div className="space-y-1.5">

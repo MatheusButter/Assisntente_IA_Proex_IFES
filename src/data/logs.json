@@ -1,0 +1,119 @@
+[
+  {
+    "id": "l1",
+    "timestamp": "2026-06-14T10:00:00.000Z",
+    "query": "como conseguir bolsa de extensão?",
+    "responseText": "As bolsas de extensão são fornecidas através do Pibex. Elas têm vigência de até 12 meses para alunos de cursos técnicos ou superiores. As submissões de projetos ocorrem pelo Sigext quando há editais abertos.",
+    "matchedChunks": [
+      "c1",
+      "c4"
+    ],
+    "resolved": true,
+    "category": "Bolsas / Pibex",
+    "feedback": "like",
+    "feedbackText": "Muito obrigado, esclareceu minha dúvida sobre o Sigext!"
+  },
+  {
+    "id": "l2",
+    "timestamp": "2026-06-15T14:30:00.000Z",
+    "query": "qual o e-mail de contato do proex?",
+    "responseText": "O e-mail oficial principal da Pró-Reitoria de Extensão (Proex) do Ifes é proex@ifes.edu.br. O telefone oficial é (27) 3357-7540 ramal 3019.",
+    "matchedChunks": [
+      "c5"
+    ],
+    "resolved": true,
+    "category": "Contatos Proex",
+    "feedback": "like",
+    "feedbackText": ""
+  },
+  {
+    "id": "l3",
+    "timestamp": "2026-06-16T11:20:00.000Z",
+    "query": "como funciona o estágio obrigatório?",
+    "responseText": "O estágio obrigatório é aquele definido na matriz curricular do seu curso. Exige a assinatura do Termo de Compromisso de Estágio (TCE) entre você, o Ifes e a empresa concedente antes de iniciar suas atividades de trabalho.",
+    "matchedChunks": [
+      "c2"
+    ],
+    "resolved": true,
+    "category": "Estágio / Convênios",
+    "feedback": null,
+    "feedbackText": ""
+  },
+  {
+    "id": "l4",
+    "timestamp": "2026-06-16T16:45:00.000Z",
+    "query": "cadastro de novas ações de extensão",
+    "responseText": "Para registrar novas ações de extensão, os coordenadores devem preencher a proposta no módulo específico do Sigext. Para suporte, fale com a Coordenadoria Geral de Ações de Extensão pelo telefone 27 3357-7500 ramal 3023 ou e-mail cadastro.extensao@ifes.edu.br.",
+    "matchedChunks": [
+      "c7"
+    ],
+    "resolved": true,
+    "category": "Ações de Extensão",
+    "feedback": "like",
+    "feedbackText": "Ótimo canal direto!"
+  },
+  {
+    "id": "l5",
+    "timestamp": "2026-06-17T09:15:00.000Z",
+    "query": "Como submeter uma patente agifes?",
+    "responseText": "A submissão de patentes, propriedade intelectual e parcerias com a incubadora são coordenadas pela Agência de Inovação do Ifes (Agifes). Entre em contato no telefone (27) 3357-7500 ramal 3022 ou acesse agifes.ifes.edu.br. Para propriedade intelectual, envie e-mail para agifes.pi@ifes.edu.br.",
+    "matchedChunks": [
+      "c8"
+    ],
+    "resolved": true,
+    "category": "Inovação / Agifes",
+    "feedback": "like",
+    "feedbackText": "Achei o e-mail de PI exato."
+  },
+  {
+    "id": "l6",
+    "timestamp": "2026-06-17T15:40:00.000Z",
+    "query": "contato da secretaria de cultura",
+    "responseText": "As políticas artísticas e culturais na Proex são cuidadas pela Secretaria de Cultura e Difusão. O contato direto é secretaria.cultura@ifes.edu.br, telefone 27 3357 7541 Ramal 3021.",
+    "matchedChunks": [
+      "c9"
+    ],
+    "resolved": true,
+    "category": "Cultura e Difusão",
+    "feedback": null,
+    "feedbackText": ""
+  },
+  {
+    "id": "l7",
+    "timestamp": "2026-06-18T10:05:00.000Z",
+    "query": "qual o edital de odontologia ou medicina?",
+    "responseText": "Desculpe, não possuo informações sobre editais específicos para odontologia ou medicina em minha base de dados atual. Por favor, entre em contato oficial pelo e-mail proex@ifes.edu.br para verificar se há alguma oferta em andamento.",
+    "matchedChunks": [],
+    "resolved": false,
+    "category": "Outros",
+    "feedback": "dislike",
+    "feedbackText": "Queria edital do semestre passado, mas entendo que não está catalogado."
+  },
+  {
+    "id": "l8",
+    "timestamp": "2026-06-18T14:50:00.000Z",
+    "query": "duvidas sobre incubadora de empresas",
+    "responseText": "A incubação de empresas juniores e startups no Ifes é coordenada pela Incubadora da Agifes. O e-mail direto de contato para assuntos relacionados à Incubadora é agifes.inc@ifes.edu.br.",
+    "matchedChunks": [
+      "c8"
+    ],
+    "resolved": true,
+    "category": "Inovação / Agifes",
+    "feedback": "like",
+    "feedbackText": "Excelente"
+  },
+  {
+    "id": "l9",
+    "timestamp": "2026-06-19T08:30:00.000Z",
+    "query": "quem cuida de festivais de música e mostras?",
+    "responseText": "Eventos de arte e espetáculos culturais presenciais ou virtuais nos campi são mapeados pelo NAC e geridos em comum com a Secretaria de Cultura e Difusão. O e-mail de contato é secretaria.cultura@ifes.edu.br.",
+    "matchedChunks": [
+      "c6",
+      "c9"
+    ],
+    "resolved": true,
+    "category": "Cultura e Difusão",
+    "feedback": null,
+    "feedbackText": ""
+  }
+]

@@ -144,7 +144,8 @@ function writeJson(filePath: string, data: any) {
 const initialConfig = {
   botName: "Assistente Proex",
   systemInstruction: "Você é o assistente virtual oficial da Pró-Reitoria de Extensão (Proex) do Ifes. Seu objetivo primordial é responder ao usuário de maneira acolhedora, humana, empática e prestativa em língua portuguesa. Use marcadores gráficos, listas estruturadas, emojis ou espaços para dar destaque a datas e prazos cruciais no lugar de negritos (evite usar qualquer tipo de asteriscos como ** nas suas respostas), e parágrafos espaçados para tornar a leitura agradável e clara. Caso considere útil ou necessário para responder à dúvida, você está habilitado(a) e encorajado(a) a sugerir e enviar links de formulários e arquivos ou documentos oficiais hospedados no site da Proex (no domínio https://proex.ifes.edu.br). Seu conhecimento prático é pautado nas informações do contexto RAG. Se a resposta exata não constar no contexto, diga isso de forma gentil e informe ativamente os canais de contato da Proex: proex@ifes.edu.br ou o telefone (27) 3357-7540 ramal 3019 para que o usuário sinta-se plenamente esclarecido.",
-  threshold: 0.25
+  threshold: 0.25,
+  welcomeMessage: "Olá! Seja muito bem-vindo ao portal de atendimento da Pró-Reitoria de Extensão (Proex/Ifes). Estou aqui para responder dúvidas institucionais com base nos documentos oficiais de editais do Pibex, as diretrizes de Estágios, Cursos de Extensão (FIC) e Núcleos de Arte e Cultura. Como posso ajudar você hoje?"
 };
 
 // Default initial sources
@@ -217,6 +218,27 @@ const initialRagStore = [
     source: "Texto Oficial de Arte & Cultura",
     title: "Núcleos de Arte e Cultura (NAC)",
     content: "O Ifes fomenta atividades artísticas e culturais por meio dos Núcleos de Arte e Cultura (NAC) presentes em seus campi. A Proex organiza anualmente mostras tecnológicas de extensão, festivais de música integrados e editais de incentivo cultural para financiar apresentações artísticas e produções audiovisuais estudantis. O principal e-mail de contato do NAC é nac@ifes.edu.br.",
+    embedding: [] as number[]
+  },
+  {
+    id: "c7",
+    source: "Contatos e Setores",
+    title: "Coordenadoria Geral de Ações de Extensão",
+    content: "A Coordenadoria Geral de Ações de Extensão é responsável pelo registro e acompanhamento de programas, projetos e ações extensionistas no Ifes. Para cadastro de ações, submissões e dúvidas gerais do setor, entre em contato pelo telefone 27 3357-7500 ramal 3023 ou envie um e-mail de contato oficial para cadastro.extensao@ifes.edu.br.",
+    embedding: [] as number[]
+  },
+  {
+    id: "c8",
+    source: "Contatos e Setores",
+    title: "Agência de Inovação do Ifes (Agifes)",
+    content: "A Agência de Inovação do Ifes (Agifes) promove a cultura de inovação, o empreendedorismo, a proteção da propriedade intelectual e a transferência de tecnologia. Para falar diretamente com a equipe da agência, entre em contato pelo telefone (27) 3357-7500 ramal 3022 ou acesse a página oficial em agifes.ifes.edu.br.",
+    embedding: [] as number[]
+  },
+  {
+    id: "c9",
+    source: "Contatos e Setores",
+    title: "Secretaria de Cultura e Difusão",
+    content: "A Secretaria de Cultura e Difusão gerencia as políticas culturais e as ações artísticas da Pró-Reitoria de Extensão. Para parcerias culturais, suporte a eventos artísticos ou dúvidas gerais do departamento, o e-mail de contato oficial é secretaria.cultura@ifes.edu.br e o telefone é 27 3357 7541 Ramal 3021.",
     embedding: [] as number[]
   }
 ];
@@ -334,11 +356,40 @@ function detectCategory(query: string): string {
   if (norm.includes("curso") || norm.includes("fic") || norm.includes("formacao") || norm.includes("capacitacao") || norm.includes("livre")) {
     return "Cursos FIC";
   }
+  if (
+    norm.includes("coordenadoria") || 
+    norm.includes("ações de extensão") || 
+    norm.includes("acoes de extensao") || 
+    norm.includes("cadastro.extensao") ||
+    norm.includes("ação de extensão") ||
+    norm.includes("acao de extensao")
+  ) {
+    return "Ações de Extensão";
+  }
+  if (
+    norm.includes("agifes") || 
+    norm.includes("inovação") || 
+    norm.includes("inovacao") || 
+    norm.includes("incubadora") || 
+    norm.includes("servtec") || 
+    norm.includes("propriedade intelectual") || 
+    norm.includes("empreendedorismo")
+  ) {
+    return "Inovação / Agifes";
+  }
+  if (
+    norm.includes("secretaria de cultura") || 
+    norm.includes("secretaria.cultura") || 
+    norm.includes("difusão") || 
+    norm.includes("difusao")
+  ) {
+    return "Cultura e Difusão";
+  }
+  if (norm.includes("arte") || norm.includes("nac") || norm.includes("musica") || norm.includes("teatro") || norm.includes("festival")) {
+    return "Arte e Cultura";
+  }
   if (norm.includes("contato") || norm.includes("telefone") || norm.includes("email") || norm.includes("falar") || norm.includes("pro-reitor") || norm.includes("reitoria") || norm.includes("endereco")) {
     return "Contatos Proex";
-  }
-  if (norm.includes("arte") || norm.includes("cultura") || norm.includes("nac") || norm.includes("musica") || norm.includes("teatro") || norm.includes("festival")) {
-    return "Arte e Cultura";
   }
   return "Outros";
 }
@@ -440,7 +491,8 @@ app.post("/api/config", (req, res) => {
   const updated = {
     botName: req.body.botName || current.botName,
     systemInstruction: req.body.systemInstruction || current.systemInstruction,
-    threshold: req.body.threshold !== undefined ? Number(req.body.threshold) : current.threshold
+    threshold: req.body.threshold !== undefined ? Number(req.body.threshold) : current.threshold,
+    welcomeMessage: req.body.welcomeMessage !== undefined ? req.body.welcomeMessage : (current.welcomeMessage || "Olá! Seja muito bem-vindo ao portal de atendimento da Pró-Reitoria de Extensão (Proex/Ifes). Estou aqui para responder dúvidas institucionais com base nos documentos oficiais de editais do Pibex, as diretrizes de Estágios, Cursos de Extensão (FIC) e Núcleos de Arte e Cultura. Como posso ajudar você hoje?")
   };
   writeJson(CONFIG_PATH, updated);
   res.json({ success: true, config: updated, hasApiKey: !!key });
@@ -562,6 +614,69 @@ app.get("/api/rag/status", (req, res) => {
   });
 });
 
+// Helper function to return custom contact info depending on matched sectors
+function getSpecificContactsForQuery(message: string): { 
+  name: string; 
+  contact: string; 
+  email?: string; 
+  site?: string;
+  extraEmails?: { label: string; email: string }[];
+} | null {
+  const norm = message.toLowerCase();
+  
+  if (
+    norm.includes("coordenadoria geral de ações de extensão") || 
+    norm.includes("coordenadoria geral de acoes de extensao") || 
+    norm.includes("ações de extensão") || 
+    norm.includes("acoes de extensao") || 
+    norm.includes("cadastro.extensao") || 
+    norm.includes("ações de extensao") ||
+    norm.includes("coordenadoria")
+  ) {
+    return {
+      name: "Coordenadoria Geral de Ações de Extensão",
+      contact: "27 3357-7500 ramal 3023",
+      email: "cadastro.extensao@ifes.edu.br"
+    };
+  }
+  
+  if (
+    norm.includes("agência de inovação") || 
+    norm.includes("agencia de inovacao") || 
+    norm.includes("agifes") || 
+    norm.includes("inovação") || 
+    norm.includes("inovacao")
+  ) {
+    return {
+      name: "Agência de Inovação do Ifes (Agifes)",
+      contact: "(27) 3357-7500 ramal 3022",
+      site: "agifes.ifes.edu.br",
+      extraEmails: [
+        { label: "Assuntos de propriedade intelectual", email: "agifes.pi@ifes.edu.br" },
+        { label: "Assuntos relacionados a Incubadora", email: "agifes.inc@ifes.edu.br" },
+        { label: "Assuntos relacionados a Serviços Tecnológicos", email: "agifes.servtec@ifes.edu.br" }
+      ]
+    };
+  }
+  
+  if (
+    norm.includes("secretaria de cultura") || 
+    norm.includes("cultura") || 
+    norm.includes("difusão") || 
+    norm.includes("difusao") || 
+    norm.includes("secretaria.cultura") ||
+    norm.includes("difundir")
+  ) {
+    return {
+      name: "Secretaria de Cultura e Difusão",
+      contact: "27 3357 7541 Ramal 3021",
+      email: "secretaria.cultura@ifes.edu.br"
+    };
+  }
+  
+  return null;
+}
+
 // 5. Send User Message & Respond via RAG Retrieval
 app.post("/api/chat", async (req, res) => {
   try {
@@ -647,8 +762,13 @@ REGRAS CRÍTICAS DE TOM E APRESENTAÇÃO (MUITO IMPORTANTE):
 3. **Seções Claras e Tópicos**: Se a explicação envolver múltiplos itens, requisitos, regras ou etapas, organize-os em tópicos estruturados com marcadores lúdicos agradáveis (Ex: "•", "📝", "📅", "➔").
 4. **SEM MARCAÇÃO DE NEGRITOS/ASTERISCOS**: ATENÇÃO: NUNCA use asteriscos (como ** ou *) para marcar textos em negrito nas suas respostas. No lugar de usar **, use espaçamento adequado ou emojis para enfatizar termos fundamentais ou datas indispensáveis. Mantenha a resposta limpa e sem nenhum asterisco.
 5. **Links de Formulários e Arquivos**: Caso ache útil ou oportuno responder indicando onde obter formulários, termos, arquivos e anexos de editais, envie diretamente o link do site da Proex (no domínio https://proex.ifes.edu.br ou sub-páginas relevantes, como por exemplo https://proex.ifes.edu.br/formularios ou caminhos que deem acesso ao download/visualização dos arquivos e formulários).
-6. **Polidez ao Não Encontrar Informações**: Se o assunto não puder ser solucionado por meio do contexto RAG disponível, explique isso gentilmente e acolha o usuário de forma proativa, fornecendo com clareza o e-mail proex@ifes.edu.br e o telefone (27) 3357-7540 ramal 3019.
-7. **Fechamento Simpático**: Conclua se colocando à disposição e desejando um bom momento (Ex: "Espero ter ajudado! Se precisar de algo mais, estou à disposição por aqui. Tenha um excelente dia! ✨"). Use 2 a 3 emojis adequados no total para humanizar.
+6. **Polidez ao Não Encontrar Informações**: Se o assunto não puder ser solucionado por meio do contexto RAG disponível, explique isso gentilmente e acolha o usuário de forma proativa, fornecendo com clareza o e-mail proex@ifes.edu.br e o telefone (27) 3357-7540 ramal 3019 (ou o contato do setor específico abaixo, se aplicável).
+7. **Contatos Personalizados por Setor/Assunto**: Se a pergunta do usuário ou o assunto estiver relacionado a algum destes setores ou locais específicos, forneça obrigatoriamente estes contatos personalizados de atendimento:
+   - Coordenadoria Geral de Ações de Extensão: contato: 27 3357-7500 ramal 3023, e-mail de contato: cadastro.extensao@ifes.edu.br
+   - Agência de Inovação do Ifes (Agifes): contato: (27) 3357-7500 ramal 3022, site: agifes.ifes.edu.br (com e-mails específicos: agifes.pi@ifes.edu.br para propriedade intelectual, agifes.inc@ifes.edu.br para assuntos de Incubadora, e agifes.servtec@ifes.edu.br para serviços tecnológicos)
+   - Secretaria de Cultura e Difusão: e-mail: secretaria.cultura@ifes.edu.br, contato: 27 3357 7541 Ramal 3021
+   - Para perguntas sobre outros setores ou assuntos gerais (os demais tópicos), indique sempre os contatos padrão da Proex: e-mail proex@ifes.edu.br ou o telefone (27) 3357-7540 ramal 3019.
+8. **Fechamento Simpático**: Conclua se colocando à disposição e desejando um bom momento (Ex: "Espero ter ajudado! Se precisar de algo mais, estou à disposição por aqui. Tenha um excelente dia! ✨"). Use 2 a 3 emojis adequados no total para humanizar.
 `;
 
     // Evaluate if matching is reliable
@@ -674,14 +794,48 @@ REGRAS CRÍTICAS DE TOM E APRESENTAÇÃO (MUITO IMPORTANTE):
         reply = response.text || "Não foi possível gerar uma resposta coerente.";
       } catch (geminiErr: any) {
         console.error("Error generating from Gemini:", geminiErr);
+        const customContact = getSpecificContactsForQuery(message);
+        let contactStringFallback = "";
+        if (customContact) {
+          let extraEmailsSection = "";
+          if (customContact.extraEmails && customContact.extraEmails.length > 0) {
+            extraEmailsSection = "\nContatos específicos por assunto da Agifes:\n" + 
+              customContact.extraEmails.map(e => `  ➔ ${e.label}: ${e.email}`).join("\n") + "\n";
+          }
+          contactStringFallback = `No entanto, você pode falar diretamente com o setor responsável (**${customContact.name}**):\n` +
+                                  `📞 Contato: ${customContact.contact}\n` +
+                                  (customContact.email ? `✉️ E-mail: ${customContact.email}\n` : "") +
+                                  (customContact.site ? `🌐 Site/Link: ${customContact.site}\n` : "") +
+                                  extraEmailsSection;
+        } else {
+          contactStringFallback = "Não consegui extrair os dados locais nesse momento. Por favor, tente enviar novamente em alguns segundos ou fale com nossa equipe oficial pelo e-mail proex@ifes.edu.br!";
+        }
+
         reply = `Olá! 😊 Ocorreu uma oscilação temporária em nosso sistema inteligente (${geminiErr.message}).\n\nNo entanto, busquei diretamente no nosso banco de referências e localizei os seguintes pontos para você:\n\n` + 
                 (contextString 
                   ? matchedChunks.map(c => `➔ ${c.title}\n${c.content}`).join("\n\n") 
-                  : "Não consegui extrair os dados locais nesse momento. Por favor, tente enviar novamente em alguns segundos ou fale com nossa equipe oficial pelo e-mail proex@ifes.edu.br!");
+                  : contactStringFallback);
       }
     } else {
       // Local highly high-fidelity simulated response if no paid/provided API Key is active
       console.log("No active Gemini API key. Generating high-fidelity mock response.");
+      const customContact = getSpecificContactsForQuery(message);
+      let contactLine = "";
+      if (customContact) {
+        let extraEmailsSection = "";
+        if (customContact.extraEmails && customContact.extraEmails.length > 0) {
+          extraEmailsSection = "\nContatos específicos por assunto da Agifes:\n" + 
+            customContact.extraEmails.map(e => `  ➔ ${e.label}: ${e.email}`).join("\n") + "\n";
+        }
+        contactLine = `Se restar qualquer dúvida sobre esse tema ou para suporte detalhado, entre em contato diretamente com o setor responsável (**${customContact.name}**):\n` +
+                      `📞 Contato: ${customContact.contact}\n` +
+                      (customContact.email ? `✉️ E-mail: ${customContact.email}\n` : "") +
+                      (customContact.site ? `🌐 Site/Link: ${customContact.site}\n` : "") +
+                      extraEmailsSection;
+      } else {
+        contactLine = "Se restar qualquer dúvida ou se precisar de suporte detalhado, sinta-se muito acolhido para falar com a equipe pelo e-mail oficial proex@ifes.edu.br ou pelo telefone (27) 3357-7540 ramal 3019.";
+      }
+
       if (contextString) {
         const mockChunksContent = matchedChunks.map((c: any) => {
           return `### 📍 ${c.title} (Fonte: *${c.source}*)
@@ -700,9 +854,25 @@ ${mockChunksContent}
 1. Verifique os editais completos diretamente no portal oficial da Proex (proex.ifes.edu.br).
 2. Lembre-se de realizar suas submissões e etapas dentro dos sistemas institucionais, como o Sigext.
 
-Se restar qualquer dúvida ou se precisar de suporte detalhado, sinta-se muito acolhido para falar com a equipe pelo e-mail oficial proex@ifes.edu.br ou pelo telefone (27) 3357-7540 ramal 3019. Estou aqui para o que precisar! 🎓`;
+${contactLine} Estou aqui para o que precisar! 🎓`;
       } else {
-        reply = `Olá! 😊 Acolhemos com muita atenção a sua dúvida sobre "${message}".
+        if (customContact) {
+          let extraEmailsSection = "";
+          if (customContact.extraEmails && customContact.extraEmails.length > 0) {
+            extraEmailsSection = "\nE-mails específicos por tema na Agifes:\n" + 
+              customContact.extraEmails.map(e => `*   ✉️ ${e.label}: ${e.email}`).join("\n") + "\n";
+          }
+          reply = `Olá! 😊 Acolhemos com muita atenção a sua dúvida sobre "${message}".
+
+Para tratar diretamente sobre este assunto, recomendamos o contato oficial com o setor especializado (**${customContact.name}**):
+
+*   📞 Telefone/Ramal: ligue para ${customContact.contact}
+` + (customContact.email ? `*   ✉️ E-mail oficial: ${customContact.email}\n` : "") +
+    (customContact.site ? `*   🌐 Site oficial: ${customContact.site}\n` : "") + 
+    extraEmailsSection + `
+Estaremos de braços abertos para te ajudar com o que você precisar! Se tiver outra pergunta sobre projetos, bolsas de extensão (Pibex) ou estágios, fique à vontade para perguntar! 📝`;
+        } else {
+          reply = `Olá! 😊 Acolhemos com muita atenção a sua dúvida sobre "${message}".
 
 Infelizmente, as informações específicas sobre este tema ainda não estão cadastradas no banco de referências rápidas da nossa Base de Conhecimento RAG local da Proex/Ifes.
 
@@ -713,6 +883,7 @@ Para que possamos te dar uma resposta institucional oficial, completa e personal
 *   📞 Por Telefone: ligue para o número (27) 3357-7540 ramal 3019 (atendimento em horário comercial)
 
 Estaremos de braços abertos para te ajudar com o que você precisar! Se tiver outra pergunta sobre projetos, bolsas de extensão (Pibex) ou estágios, fique à vontade para perguntar! 📝`;
+        }
       }
     }
 
@@ -790,8 +961,11 @@ app.get("/api/dashboard/stats", (req, res) => {
     "Bolsas / Pibex": 0,
     "Estágio / Convênios": 0,
     "Cursos FIC": 0,
-    "Contatos Proex": 0,
+    "Ações de Extensão": 0,
+    "Inovação / Agifes": 0,
+    "Cultura e Difusão": 0,
     "Arte e Cultura": 0,
+    "Contatos Proex": 0,
     "Outros": 0
   };
   
@@ -838,6 +1012,35 @@ app.get("/api/dashboard/stats", (req, res) => {
     acessos: dailyCounts[key]
   }));
 
+  // D. Category Resolution metrics (NEW Chart Data!)
+  const categoryResolution: Record<string, { resolvidos: number; direcionados: number }> = {
+    "Bolsas / Pibex": { resolvidos: 0, direcionados: 0 },
+    "Estágio / Convênios": { resolvidos: 0, direcionados: 0 },
+    "Cursos FIC": { resolvidos: 0, direcionados: 0 },
+    "Ações de Extensão": { resolvidos: 0, direcionados: 0 },
+    "Inovação / Agifes": { resolvidos: 0, direcionados: 0 },
+    "Cultura e Difusão": { resolvidos: 0, direcionados: 0 },
+    "Arte e Cultura": { resolvidos: 0, direcionados: 0 },
+    "Contatos Proex": { resolvidos: 0, direcionados: 0 },
+    "Outros": { resolvidos: 0, direcionados: 0 }
+  };
+
+  logs.forEach((log: any) => {
+    const cat = log.category || "Outros";
+    const targetCat = categoryResolution[cat] !== undefined ? cat : "Outros";
+    if (log.resolved === true) {
+      categoryResolution[targetCat].resolvidos++;
+    } else {
+      categoryResolution[targetCat].direcionados++;
+    }
+  });
+
+  const categoryResolutionData = Object.keys(categoryResolution).map(key => ({
+    name: key,
+    Resolvidos: categoryResolution[key].resolvidos,
+    Direcionados: categoryResolution[key].direcionados
+  }));
+
   // General counts totals
   const totalQueries = logs.length;
   const usefulCount = logs.filter((l: any) => l.feedback === "like").length;
@@ -849,7 +1052,8 @@ app.get("/api/dashboard/stats", (req, res) => {
     nonUsefulCount,
     resolutionData,
     categoriesData,
-    accessTimelineData
+    accessTimelineData,
+    categoryResolutionData
   });
 });
 
