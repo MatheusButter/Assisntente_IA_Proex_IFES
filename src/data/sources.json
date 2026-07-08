@@ -1,0 +1,32 @@
+[
+  {
+    "id": "s1",
+    "type": "url",
+    "value": "https://proex.ifes.edu.br/editais",
+    "title": "Editais de Extensão e Bolsas de Estudo (Pibex)"
+  },
+  {
+    "id": "s2",
+    "type": "url",
+    "value": "https://proex.ifes.edu.br/estagios",
+    "title": "Diretrizes de Estágio e Relações com Empresas"
+  },
+  {
+    "id": "s3",
+    "type": "url",
+    "value": "https://proex.ifes.edu.br/cursos-fic",
+    "title": "Cadastro de Cursos de Formação Inicial e Continuada (FIC)"
+  },
+  {
+    "id": "s4",
+    "type": "text",
+    "value": "Texto Oficial de Arte & Cultura: O Ifes fomenta atividades artísticas e culturais por meio dos Núcleos de Arte e Cultura (NAC) presentes em seus campi. A Proex organiza anualmente mostras tecnológicas, festivais de música integrados e editais de apoio financeiro a apresentações artísticas e produções audiovisuais estudantis. O principal canal de comunicação do NAC é nac@ifes.edu.br.",
+    "title": "Núcleos de Arte e Cultura (NAC)"
+  },
+  {
+    "id": "s5",
+    "type": "text",
+    "value": "Contatos oficiais da Agência de Inovação do Ifes (Agifes): Para assuntos relacionados a propriedade intelectual (patentes, marcas e direitos autorais), entre em contato pelo e-mail agifes.pi@ifes.edu.br. Para assuntos relacionados à Incubadora de Empresas, entre em contato pelo e-mail agifes.inc@ifes.edu.br. Para assuntos relacionados a Serviços Tecnológicos e transferência de tecnologia, entre em contato pelo e-mail agifes.servtec@ifes.edu.br.",
+    "title": "Agência de Inovação (Agifes) - Contatos e Canais"
+  }
+]

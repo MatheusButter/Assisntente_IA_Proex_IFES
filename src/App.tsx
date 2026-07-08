@@ -47,6 +47,8 @@ import {
   AreaChart, 
   Area 
 } from "recharts";
+import DashboardAnalytics from "./components/DashboardAnalytics";
+import DashboardConfig from "./components/DashboardConfig";
 
 // Interfaces for our state variables
 interface Source {
@@ -103,7 +105,8 @@ interface AppLog {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"chat" | "dashboard" | "settings">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "dashboard">("chat");
+  const [dashSubTab, setDashSubTab] = useState<"analytics" | "config">("analytics");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Chat State
@@ -353,6 +356,20 @@ export default function App() {
     }
   };
 
+  const handleClearLogs = async () => {
+    try {
+      const r = await fetch("/api/logs/clear", { method: "POST" });
+      const data = await r.json();
+      if (data.success) {
+        await fetchDashboardData();
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  };
+
   // Submit dynamic system configuration update
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -512,10 +529,36 @@ export default function App() {
     }
   };
 
+  // Toggle scheduler for weekly automatic database indexing
+  const handleToggleWeeklyUpdate = async (enabled: boolean) => {
+    try {
+      const r = await fetch("/api/rag/scheduler/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled })
+      });
+      const data = await r.json();
+      if (data.success) {
+        setRagStatus(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            scheduler: data.scheduler
+          };
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   // Send message from user
   const handleSendMessage = async (customText?: string) => {
     const textToSend = customText || inputMsg;
     if (!textToSend.trim()) return;
+
+    // Check if there is already any user message in the current conversation
+    const hasPreviousUserMessages = messages.some(m => m.sender === "user");
 
     const userMessage: ChatMessage = {
       id: "msg_" + Date.now(),
@@ -532,7 +575,10 @@ export default function App() {
       const r = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: textToSend })
+        body: JSON.stringify({ 
+          message: textToSend,
+          isFirstInteraction: !hasPreviousUserMessages
+        })
       });
       const data = await r.json();
 
@@ -618,15 +664,33 @@ export default function App() {
       <header className="bg-emerald-800 text-white shadow-md border-b-4 border-emerald-900 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3 text-center sm:text-left self-center">
-            <div className="bg-white p-2 rounded-lg text-emerald-800 shadow-sm flex items-center justify-center shrink-0">
-              <Building className="w-6 h-6" />
+            <div className="bg-white p-1.5 rounded-lg shadow-sm flex items-center justify-center shrink-0 w-11 h-11">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" className="w-full h-full">
+                {/* Red Circle (top left) */}
+                <circle cx="22" cy="22" r="12" fill="#E52427" />
+                
+                {/* Column 1 Green Squares */}
+                <rect x="10" y="38" width="24" height="24" rx="3" fill="#139037" />
+                <rect x="10" y="66" width="24" height="24" rx="3" fill="#139037" />
+                <rect x="10" y="94" width="24" height="24" rx="3" fill="#139037" />
+                
+                {/* Column 2 Green Squares */}
+                <rect x="38" y="10" width="24" height="24" rx="3" fill="#139037" />
+                <rect x="38" y="38" width="24" height="24" rx="3" fill="#139037" />
+                <rect x="38" y="66" width="24" height="24" rx="3" fill="#139037" />
+                <rect x="38" y="94" width="24" height="24" rx="3" fill="#139037" />
+                
+                {/* Column 3 Green Squares */}
+                <rect x="66" y="10" width="24" height="24" rx="3" fill="#139037" />
+                <rect x="66" y="66" width="24" height="24" rx="3" fill="#139037" />
+              </svg>
             </div>
             <div>
               <div className="flex items-center gap-2 justify-center sm:justify-start">
                 <span className="font-bold tracking-wide text-lg md:text-xl">IFES</span>
                 <span className="text-[10px] bg-emerald-600 px-2 py-0.5 rounded-full text-emerald-100 uppercase tracking-widest font-mono font-semibold">Proex</span>
               </div>
-              <p className="text-xs text-emerald-100 tracking-tight">Pró-Reitoria de Extensão — Chatbot inteligente com RAG</p>
+              <p className="text-xs text-emerald-100 tracking-tight">Pró-Reitoria de Extensão — Chatbot inteligente para auxilio a dúvidas</p>
             </div>
           </div>
 
@@ -653,18 +717,7 @@ export default function App() {
               }`}
             >
               <BarChart3 className="w-3.5 h-3.5 md:w-4 h-4" />
-              <span>Painel <span className="hidden sm:inline">Gestor</span></span>
-            </button>
-            <button
-              onClick={() => setActiveTab("settings")}
-              className={`flex items-center gap-1.5 md:gap-2 px-2.5 py-1.5 md:px-4 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all ${
-                activeTab === "settings" 
-                  ? "bg-emerald-600 text-white shadow-sm" 
-                  : "text-emerald-100 hover:bg-emerald-800/40"
-              }`}
-            >
-              <Settings className="w-3.5 h-3.5 md:w-4 h-4" />
-              <span><span className="hidden sm:inline">Configuração & </span>RAG</span>
+              <span>Painel Gestor</span>
             </button>
             {isAuthenticated && (
               <button
@@ -957,6 +1010,96 @@ export default function App() {
                 transition={{ duration: 0.2 }}
                 className="space-y-6"
               >
+                {/* Unified Tab Title and Switcher */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                      <Sliders className="w-5 h-5 text-emerald-800" />
+                      Painel Gestor & Configuração RAG
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Monitore as estatísticas de uso, consulte logs de auditoria e gerencie as fontes de conhecimento e prompts do assistente.
+                    </p>
+                  </div>
+                  
+                  {/* Modern Segmented Controller */}
+                  <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 self-stretch sm:self-auto shrink-0">
+                    <button
+                      onClick={() => setDashSubTab("analytics")}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all select-none cursor-pointer ${
+                        dashSubTab === "analytics"
+                          ? "bg-white text-emerald-800 shadow-sm font-bold"
+                          : "text-slate-600 hover:text-slate-900 font-medium"
+                      }`}
+                    >
+                      <BarChart3 className="w-3.5 h-3.5" />
+                      <span>Métricas & Auditoria</span>
+                    </button>
+                    <button
+                      onClick={() => setDashSubTab("config")}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all select-none cursor-pointer ${
+                        dashSubTab === "config"
+                          ? "bg-white text-emerald-800 shadow-sm font-bold"
+                          : "text-slate-600 hover:text-slate-900 font-medium"
+                      }`}
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Configurações & RAG</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-tabs Rendering */}
+                {dashSubTab === "analytics" ? (
+                  <DashboardAnalytics
+                    dashboardStats={dashboardStats}
+                    adminLogs={adminLogs}
+                    expandedLogId={expandedLogId}
+                    setExpandedLogId={setExpandedLogId}
+                    isStatsLoading={isStatsLoading}
+                    fetchDashboardData={fetchDashboardData}
+                    onClearLogs={handleClearLogs}
+                  />
+                ) : (
+                  <DashboardConfig
+                    botConfig={botConfig}
+                    setBotConfig={setBotConfig}
+                    handleSaveConfig={handleSaveConfig}
+                    handleRestoreDefaultConfig={handleRestoreDefaultConfig}
+                    sourceActionMessage={sourceActionMessage}
+                    newSourceType={newSourceType}
+                    setNewSourceType={setNewSourceType}
+                    newSourceTitle={newSourceTitle}
+                    setNewSourceTitle={setNewSourceTitle}
+                    newSourceValue={newSourceValue}
+                    setNewSourceValue={setNewSourceValue}
+                    handleAddSource={handleAddSource}
+                    isAddingSource={isAddingSource}
+                    sources={sources}
+                    deletingSourceId={deletingSourceId}
+                    setDeletingSourceId={setDeletingSourceId}
+                    handleDeleteSource={handleDeleteSource}
+                    ragStatus={ragStatus}
+                    handleTrainRAG={handleTrainRAG}
+                    isTraining={isTraining}
+                    currentTrainingStep={currentTrainingStep}
+                    trainingLogs={trainingLogs}
+                    onToggleWeeklyUpdate={handleToggleWeeklyUpdate}
+                  />
+                )}
+              </motion.div>
+            )
+          )}
+
+          {/* INACTIVE WRAPPER FOR OLD VIEWS CLEANUP */}
+          {false && (
+            <motion.div
+              key="old-dashboard-tab-content-inactive"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="space-y-6"
+            >
               {/* Stats overview banner */}
               {isStatsLoading ? (
                 <div className="bg-white p-12 text-center rounded-2xl border border-slate-200">
@@ -1316,7 +1459,7 @@ export default function App() {
                 </>
               )}
             </motion.div>
-          ))}
+          )}
 
 
           {/* TAB 3: CONFIGURATIONS & RAW DATA TRAINER */}

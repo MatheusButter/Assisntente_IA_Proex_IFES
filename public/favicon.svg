@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" width="100%" height="100%">
+  <!-- Red Circle (top left) -->
+  <circle cx="22" cy="22" r="12" fill="#E52427" />
+  
+  <!-- Column 1 Green Squares -->
+  <rect x="10" y="38" width="24" height="24" rx="3" fill="#139037" />
+  <rect x="10" y="66" width="24" height="24" rx="3" fill="#139037" />
+  <rect x="10" y="94" width="24" height="24" rx="3" fill="#139037" />
+  
+  <!-- Column 2 Green Squares -->
+  <rect x="38" y="10" width="24" height="24" rx="3" fill="#139037" />
+  <rect x="38" y="38" width="24" height="24" rx="3" fill="#139037" />
+  <rect x="38" y="66" width="24" height="24" rx="3" fill="#139037" />
+  <rect x="38" y="94" width="24" height="24" rx="3" fill="#139037" />
+  
+  <!-- Column 3 Green Squares -->
+  <rect x="66" y="10" width="24" height="24" rx="3" fill="#139037" />
+  <rect x="66" y="66" width="24" height="24" rx="3" fill="#139037" />
+</svg>

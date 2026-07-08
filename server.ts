@@ -107,6 +107,22 @@ const CONFIG_PATH = path.join(process.cwd(), "src/data/config.json");
 const RAG_STORE_PATH = path.join(process.cwd(), "src/data/rag-store.json");
 const LOGS_PATH = path.join(process.cwd(), "src/data/logs.json");
 const SOURCES_PATH = path.join(process.cwd(), "src/data/sources.json");
+const SCHEDULER_PATH = path.join(process.cwd(), "src/data/scheduler.json");
+
+// Helper to manage automatic weekly updates state
+function getSchedulerInfo() {
+  const defaultVal = {
+    lastTrainTimestamp: Date.now(),
+    weeklyUpdateEnabled: true
+  };
+  return readJson(SCHEDULER_PATH, defaultVal);
+}
+
+function updateLastTrainTimestamp() {
+  const info = getSchedulerInfo();
+  info.lastTrainTimestamp = Date.now();
+  writeJson(SCHEDULER_PATH, info);
+}
 
 // Helper function to read json safely
 function readJson(filePath: string, defaultVal: any) {
@@ -173,6 +189,12 @@ const initialSources = [
     type: "text",
     value: "Texto Oficial de Arte & Cultura: O Ifes fomenta atividades artísticas e culturais por meio dos Núcleos de Arte e Cultura (NAC) presentes em seus campi. A Proex organiza anualmente mostras tecnológicas, festivais de música integrados e editais de apoio financeiro a apresentações artísticas e produções audiovisuais estudantis. O principal canal de comunicação do NAC é nac@ifes.edu.br.",
     title: "Núcleos de Arte e Cultura (NAC)"
+  },
+  {
+    id: "s5",
+    type: "text",
+    value: "Contatos oficiais da Agência de Inovação do Ifes (Agifes): Para assuntos relacionados a propriedade intelectual (patentes, marcas e direitos autorais), entre em contato pelo e-mail agifes.pi@ifes.edu.br. Para assuntos relacionados à Incubadora de Empresas, entre em contato pelo e-mail agifes.inc@ifes.edu.br. Para assuntos relacionados a Serviços Tecnológicos e transferência de tecnologia, entre em contato pelo e-mail agifes.servtec@ifes.edu.br.",
+    title: "Agência de Inovação (Agifes) - Contatos e Canais"
   }
 ];
 
@@ -231,7 +253,7 @@ const initialRagStore = [
     id: "c8",
     source: "Contatos e Setores",
     title: "Agência de Inovação do Ifes (Agifes)",
-    content: "A Agência de Inovação do Ifes (Agifes) promove a cultura de inovação, o empreendedorismo, a proteção da propriedade intelectual e a transferência de tecnologia. Para falar diretamente com a equipe da agência, entre em contato pelo telefone (27) 3357-7500 ramal 3022 ou acesse a página oficial em agifes.ifes.edu.br.",
+    content: "A Agência de Inovação do Ifes (Agifes) promove a cultura de inovação, o empreendedorismo, a proteção da propriedade intelectual e a transferência de tecnologia. Contatos de e-mail oficiais para atendimento na Agifes: agifes.pi@ifes.edu.br para assuntos de propriedade intelectual (marcas e patentes), agifes.inc@ifes.edu.br para incubação e fomento de empresas, e agifes.servtec@ifes.edu.br para assuntos de serviços tecnológicos e contratos. Telefone de suporte: (27) 3357-7500 ramal 3022.",
     embedding: [] as number[]
   },
   {
@@ -290,6 +312,31 @@ const initialLogs = [
     feedbackText: "Queria edital do semestre passado, mas entendo que não está catalogado."
   }
 ];
+
+// Helper to prune logs older than 45 days
+function pruneOldLogs(logs: any[]): any[] {
+  const fortyFiveDaysAgo = Date.now() - 45 * 24 * 60 * 60 * 1000;
+  return logs.filter((log: any) => {
+    if (!log || !log.timestamp) return true;
+    try {
+      const logTime = new Date(log.timestamp).getTime();
+      if (isNaN(logTime)) return true;
+      return logTime >= fortyFiveDaysAgo;
+    } catch (e) {
+      return true;
+    }
+  });
+}
+
+// Unified function to get logs, which automatically prunes old entries
+function getLogs(): any[] {
+  const logs = readJson(LOGS_PATH, initialLogs);
+  const pruned = pruneOldLogs(logs);
+  if (pruned.length !== logs.length) {
+    writeJson(LOGS_PATH, pruned);
+  }
+  return pruned;
+}
 
 // Local similarity metrics using basic TF-IDF style keyword matches (fallback)
 function getKeywordOverlapScore(query: string, content: string): number {
@@ -527,91 +574,113 @@ app.delete("/api/rag/sources/:id", (req, res) => {
   res.json({ success: true });
 });
 
+// Core function to run training procedure (Scrape, chunk and index all sources)
+async function runTrainingProcedure(): Promise<{ success: boolean; chunkCount: number; log: string[] }> {
+  const sources = readJson(SOURCES_PATH, initialSources);
+  const newStore: any[] = [];
+  const trainingLogs: string[] = [];
+
+  trainingLogs.push(`[${new Date().toLocaleTimeString()}] Iniciando indexação de RAG...`);
+  
+  for (const src of sources) {
+    trainingLogs.push(`[${new Date().toLocaleTimeString()}] Processando fonte: "${src.title}" (${src.type === "url" ? "Endereço Web" : "Documento de texto"})`);
+    
+    let chunks: string[] = [];
+    if (src.type === "url") {
+      chunks = await simulateScrapeUrl(src.value, src.title);
+    } else {
+      // Direct manual text
+      const text = src.value;
+      const paragraphs = text.split(/\n+/).filter((p: string) => p.trim().length > 20);
+      chunks = paragraphs.map((p: string) => p.trim());
+    }
+    
+    trainingLogs.push(`[${new Date().toLocaleTimeString()}] Encontrados ${chunks.length} trechos em "${src.title}"`);
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const textChunk = chunks[i];
+      const chunkId = `c_${src.id}_${i}`;
+      
+      let embeddingValues: number[] = [];
+      
+      // Generate embedding real via Gemini API if key is functional
+      if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY") {
+        try {
+          trainingLogs.push(`[${new Date().toLocaleTimeString()}] Gerando vetor para trecho ${i + 1}/${chunks.length}...`);
+          const embeddingResponse = (await embedContentWithRetry({
+            model: "gemini-embedding-2-preview",
+            contents: textChunk,
+          })) as any;
+          
+          if (embeddingResponse.embedding?.values) {
+            embeddingValues = embeddingResponse.embedding.values;
+          } else if (embeddingResponse.embeddings?.[0]?.values) {
+            embeddingValues = embeddingResponse.embeddings[0].values;
+          }
+        } catch (embedError: any) {
+          console.error("Erro ao gerar embedding:", embedError);
+          trainingLogs.push(`[${new Date().toLocaleTimeString()}] Erro no vetor: usando apenas busca léxica de fallback.`);
+        }
+      }
+      
+      newStore.push({
+        id: chunkId,
+        source: src.value,
+        title: src.title,
+        content: textChunk,
+        embedding: embeddingValues
+      });
+    }
+  }
+
+  trainingLogs.push(`[${new Date().toLocaleTimeString()}] Sucesso! Gravação de ${newStore.length} trechos vetoriais realizada.`);
+  
+  // Save to the rag store
+  writeJson(RAG_STORE_PATH, newStore);
+  
+  // Update last trained timestamp
+  updateLastTrainTimestamp();
+
+  return {
+    success: true,
+    chunkCount: newStore.length,
+    log: trainingLogs
+  };
+}
+
 // 3. Train Base: Scrape and index all registered sources
 app.post("/api/rag/train", async (req, res) => {
   try {
-    const sources = readJson(SOURCES_PATH, initialSources);
-    const ragStore = readJson(RAG_STORE_PATH, initialRagStore);
-    const newStore: any[] = [];
-    const trainingLogs: string[] = [];
-
-    trainingLogs.push(`[${new Date().toLocaleTimeString()}] Iniciando indexação de RAG...`);
-    
-    for (const src of sources) {
-      trainingLogs.push(`[${new Date().toLocaleTimeString()}] Processando fonte: "${src.title}" (${src.type === "url" ? "Endereço Web" : "Documento de texto"})`);
-      
-      let chunks: string[] = [];
-      if (src.type === "url") {
-        chunks = await simulateScrapeUrl(src.value, src.title);
-      } else {
-        // Direct manual text
-        const text = src.value;
-        const paragraphs = text.split(/\n+/).filter((p: string) => p.trim().length > 20);
-        chunks = paragraphs.map((p: string) => p.trim());
-      }
-      
-      trainingLogs.push(`[${new Date().toLocaleTimeString()}] Encontrados ${chunks.length} trechos em "${src.title}"`);
-      
-      for (let i = 0; i < chunks.length; i++) {
-        const textChunk = chunks[i];
-        const chunkId = `c_${src.id}_${i}`;
-        
-        let embeddingValues: number[] = [];
-        
-        // Generate embedding real via Gemini API if key is functional
-        if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY") {
-          try {
-            trainingLogs.push(`[${new Date().toLocaleTimeString()}] Gerando vetor para trecho ${i + 1}/${chunks.length}...`);
-            const embeddingResponse = (await embedContentWithRetry({
-              model: "gemini-embedding-2-preview",
-              contents: textChunk,
-            })) as any;
-            
-            if (embeddingResponse.embedding?.values) {
-              embeddingValues = embeddingResponse.embedding.values;
-            } else if (embeddingResponse.embeddings?.[0]?.values) {
-              embeddingValues = embeddingResponse.embeddings[0].values;
-            }
-          } catch (embedError: any) {
-            console.error("Erro ao gerar embedding:", embedError);
-            trainingLogs.push(`[${new Date().toLocaleTimeString()}] Erro no vetor: usando apenas busca léxica de fallback.`);
-          }
-        }
-        
-        newStore.push({
-          id: chunkId,
-          source: src.value,
-          title: src.title,
-          content: textChunk,
-          embedding: embeddingValues
-        });
-      }
-    }
-
-    trainingLogs.push(`[${new Date().toLocaleTimeString()}] Sucesso! Gravação de ${newStore.length} trechos vetoriais realizada.`);
-    
-    // Save to the rag store
-    writeJson(RAG_STORE_PATH, newStore);
-    
+    const result = await runTrainingProcedure();
     res.json({
       success: true,
-      log: trainingLogs,
-      chunkCount: newStore.length
+      log: result.log,
+      chunkCount: result.chunkCount
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// 4. Status of the RAG Index
+// 4. Status of the RAG Index with scheduler info
 app.get("/api/rag/status", (req, res) => {
   const store = readJson(RAG_STORE_PATH, initialRagStore);
   const embeddedCount = store.filter((s: any) => s.embedding && s.embedding.length > 0).length;
+  const scheduler = getSchedulerInfo();
   res.json({
     chunkCount: store.length,
     embeddedCount: embeddedCount,
-    hasApiKey: !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY"
+    hasApiKey: !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY",
+    scheduler
   });
+});
+
+// Toggle Scheduler
+app.post("/api/rag/scheduler/toggle", (req, res) => {
+  const info = getSchedulerInfo();
+  info.weeklyUpdateEnabled = req.body.enabled !== false;
+  writeJson(SCHEDULER_PATH, info);
+  res.json({ success: true, scheduler: info });
 });
 
 // Helper function to return custom contact info depending on matched sectors
@@ -680,7 +749,8 @@ function getSpecificContactsForQuery(message: string): {
 // 5. Send User Message & Respond via RAG Retrieval
 app.post("/api/chat", async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, isFirstInteraction } = req.body;
+    const isFirstInteractionBool = isFirstInteraction !== false;
     if (!message || message.trim().length === 0) {
       return res.status(400).json({ error: "Mensagem vazia não é permitida." });
     }
@@ -757,7 +827,10 @@ app.post("/api/chat", async (req, res) => {
     
     const formattingGuidelines = `
 REGRAS CRÍTICAS DE TOM E APRESENTAÇÃO (MUITO IMPORTANTE):
-1. **Saudação Calorosa e Humana**: Comece sempre de maneira amigável, educada e calorosa (Ex: "Olá! 😊 Com certeza posso te ajudar com isso.", "Olá! Que bom falar com você. De acordo com as informações da Proex:"). Evite começos robóticos ou ríspidos.
+${isFirstInteractionBool 
+  ? `1. **Saudação Calorosa e Humana**: Comece sempre de maneira amigável, educada e calorosa (Ex: "Olá! 😊 Com certeza posso te ajudar com isso.", "Olá! Que bom falar com você. De acordo com as informações da Proex:"). Evite começos robóticos ou ríspidos.` 
+  : `1. **Sem Repetição de Saudações**: Esta é uma mensagem subsequente de continuidade na conversa. NÃO repita saudações iniciais, boas-vindas ou apresentações institucionais (como "Olá!", "Que bom falar com você", "Com certeza posso te ajudar a entender como funciona o nosso Programa de Apoio à Extensão, o PAEX" ou similares). Vá direto à resposta da dúvida do usuário de maneira direta, cordial, natural e sem redundâncias.`
+}
 2. **Estrutura Visual Fluida**: Use parágrafos pequenos (até 3 linhas por parágrafo) e insira uma quebra de linha em branco entre eles para arejar a leitura. Evite blocos extensos de texto.
 3. **Seções Claras e Tópicos**: Se a explicação envolver múltiplos itens, requisitos, regras ou etapas, organize-os em tópicos estruturados com marcadores lúdicos agradáveis (Ex: "•", "📝", "📅", "➔").
 4. **SEM MARCAÇÃO DE NEGRITOS/ASTERISCOS**: ATENÇÃO: NUNCA use asteriscos (como ** ou *) para marcar textos em negrito nas suas respostas. No lugar de usar **, use espaçamento adequado ou emojis para enfatizar termos fundamentais ou datas indispensáveis. Mantenha a resposta limpa e sem nenhum asterisco.
@@ -811,7 +884,10 @@ REGRAS CRÍTICAS DE TOM E APRESENTAÇÃO (MUITO IMPORTANTE):
           contactStringFallback = "Não consegui extrair os dados locais nesse momento. Por favor, tente enviar novamente em alguns segundos ou fale com nossa equipe oficial pelo e-mail proex@ifes.edu.br!";
         }
 
-        reply = `Olá! 😊 Ocorreu uma oscilação temporária em nosso sistema inteligente (${geminiErr.message}).\n\nNo entanto, busquei diretamente no nosso banco de referências e localizei os seguintes pontos para você:\n\n` + 
+        const prefix = isFirstInteractionBool
+          ? `Olá! 😊 Ocorreu uma oscilação temporária em nosso sistema inteligente (${geminiErr.message}).\n\nNo entanto, busquei diretamente no nosso banco de referências e localizei os seguintes pontos para você:\n\n`
+          : `Ocorreu uma instabilidade rápida no sistema. Aqui estão as informações de referência:\n\n`;
+        reply = prefix + 
                 (contextString 
                   ? matchedChunks.map(c => `➔ ${c.title}\n${c.content}`).join("\n\n") 
                   : contactStringFallback);
@@ -842,7 +918,8 @@ REGRAS CRÍTICAS DE TOM E APRESENTAÇÃO (MUITO IMPORTANTE):
 • Diretriz de atendimento: ${c.content}`;
         }).join("\n\n");
 
-        reply = `Olá! 😊 Fico feliz em poder te auxiliar com as informações da Pró-Reitoria de Extensão (Proex). 
+        if (isFirstInteractionBool) {
+          reply = `Olá! 😊 Fico feliz em poder te auxiliar com as informações da Pró-Reitoria de Extensão (Proex). 
 
 Com base no nosso banco de conhecimento oficial, localizei as seguintes informações estruturadas para você:
 
@@ -855,6 +932,15 @@ ${mockChunksContent}
 2. Lembre-se de realizar suas submissões e etapas dentro dos sistemas institucionais, como o Sigext.
 
 ${contactLine} Estou aqui para o que precisar! 🎓`;
+        } else {
+          reply = `Com base no nosso banco de dados, aqui estão as informações para você:
+
+${mockChunksContent}
+
+---
+
+${contactLine}`;
+        }
       } else {
         if (customContact) {
           let extraEmailsSection = "";
@@ -862,7 +948,8 @@ ${contactLine} Estou aqui para o que precisar! 🎓`;
             extraEmailsSection = "\nE-mails específicos por tema na Agifes:\n" + 
               customContact.extraEmails.map(e => `*   ✉️ ${e.label}: ${e.email}`).join("\n") + "\n";
           }
-          reply = `Olá! 😊 Acolhemos com muita atenção a sua dúvida sobre "${message}".
+          if (isFirstInteractionBool) {
+            reply = `Olá! 😊 Acolhemos com muita atenção a sua dúvida sobre "${message}".
 
 Para tratar diretamente sobre este assunto, recomendamos o contato oficial com o setor especializado (**${customContact.name}**):
 
@@ -871,8 +958,18 @@ Para tratar diretamente sobre este assunto, recomendamos o contato oficial com o
     (customContact.site ? `*   🌐 Site oficial: ${customContact.site}\n` : "") + 
     extraEmailsSection + `
 Estaremos de braços abertos para te ajudar com o que você precisar! Se tiver outra pergunta sobre projetos, bolsas de extensão (Pibex) ou estágios, fique à vontade para perguntar! 📝`;
+          } else {
+            reply = `Para o tema "${message}", recomendamos o contato direto com o setor especializado (**${customContact.name}**):
+
+*   📞 Telefone/Ramal: ${customContact.contact}
+` + (customContact.email ? `*   ✉️ E-mail oficial: ${customContact.email}\n` : "") +
+    (customContact.site ? `*   🌐 Site oficial: ${customContact.site}\n` : "") + 
+    extraEmailsSection + `
+Estou à disposição se precisar de algo mais!`;
+          }
         } else {
-          reply = `Olá! 😊 Acolhemos com muita atenção a sua dúvida sobre "${message}".
+          if (isFirstInteractionBool) {
+            reply = `Olá! 😊 Acolhemos com muita atenção a sua dúvida sobre "${message}".
 
 Infelizmente, as informações específicas sobre este tema ainda não estão cadastradas no banco de referências rápidas da nossa Base de Conhecimento RAG local da Proex/Ifes.
 
@@ -883,6 +980,13 @@ Para que possamos te dar uma resposta institucional oficial, completa e personal
 *   📞 Por Telefone: ligue para o número (27) 3357-7540 ramal 3019 (atendimento em horário comercial)
 
 Estaremos de braços abertos para te ajudar com o que você precisar! Se tiver outra pergunta sobre projetos, bolsas de extensão (Pibex) ou estágios, fique à vontade para perguntar! 📝`;
+          } else {
+            reply = `Infelizmente, informações detalhadas sobre "${message}" não foram encontradas na Base de Conhecimento local.
+
+Recomenda-se o contato direto com a equipe Proex para um atendimento personalizado:
+*   ✉️ E-mail: proex@ifes.edu.br
+*   📞 Telefone: (27) 3357-7540 ramal 3019`;
+          }
         }
       }
     }
@@ -891,7 +995,7 @@ Estaremos de braços abertos para te ajudar com o que você precisar! Se tiver o
     reply = reply.replace(/\*\*/g, "");
 
     // Save interaction logs to support the Admin Dashboard metrics
-    const logs = readJson(LOGS_PATH, initialLogs);
+    const logs = getLogs();
     const newLog = {
       id: "log_" + Date.now(),
       timestamp: new Date().toISOString(),
@@ -924,7 +1028,7 @@ app.post("/api/feedback", (req, res) => {
     return res.status(400).json({ error: "Parâmetro logId é necessário." });
   }
 
-  const logs = readJson(LOGS_PATH, initialLogs);
+  const logs = getLogs();
   const index = logs.findIndex((l: any) => l.id === logId);
   
   if (index !== -1) {
@@ -939,14 +1043,24 @@ app.post("/api/feedback", (req, res) => {
 
 // 7. Get Logs for Admin View
 app.get("/api/logs", (req, res) => {
-  const logs = readJson(LOGS_PATH, initialLogs);
+  const logs = getLogs();
   // Return reversed logs so latest show up first
   res.json([...logs].reverse());
 });
 
+// Clear all logs/questions history
+app.post("/api/logs/clear", (req, res) => {
+  try {
+    writeJson(LOGS_PATH, []);
+    res.json({ success: true, message: "Todos os logs foram apagados com sucesso de forma segura." });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 8. Get metrics stats aggregated for Recharts
 app.get("/api/dashboard/stats", (req, res) => {
-  const logs = readJson(LOGS_PATH, initialLogs);
+  const logs = getLogs();
   
   // A. Resolution Rate Pie/Donut Stats
   const resolvedCount = logs.filter((l: any) => l.resolved === true).length;
@@ -1058,6 +1172,30 @@ app.get("/api/dashboard/stats", (req, res) => {
 });
 
 
+// Background Scheduler for weekly automatic RAG update
+async function checkWeeklyUpdateScheduler() {
+  const info = getSchedulerInfo();
+  if (!info.weeklyUpdateEnabled) return;
+
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const elapsed = now - info.lastTrainTimestamp;
+
+  if (elapsed >= sevenDaysMs) {
+    console.log("[Scheduler] Mais de 7 dias se passaram desde a última atualização do RAG. Iniciando atualização automática semanal...");
+    try {
+      const result = await runTrainingProcedure();
+      console.log(`[Scheduler] Atualização semanal automática concluída com sucesso. ${result.chunkCount} trechos gerados.`);
+    } catch (err) {
+      console.error("[Scheduler] Erro durante a atualização automática semanal do RAG:", err);
+    }
+  } else {
+    const hoursRemaining = ((sevenDaysMs - elapsed) / (1000 * 60 * 60)).toFixed(1);
+    console.log(`[Scheduler] Atualização automática semanal agendada. Próxima execução em aprox. ${hoursRemaining} horas.`);
+  }
+}
+
+
 // Serve static frontend files in production or hook Vite in development
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
@@ -1078,6 +1216,16 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[OK] Servidor RAG Proex Ifes rodando na porta ${PORT}`);
+    
+    // Run initial check after 10 seconds of startup
+    setTimeout(() => {
+      checkWeeklyUpdateScheduler().catch(console.error);
+    }, 10000);
+
+    // Periodically check every 1 hour (3600000 ms)
+    setInterval(() => {
+      checkWeeklyUpdateScheduler().catch(console.error);
+    }, 60 * 60 * 1000);
   });
 }
 
